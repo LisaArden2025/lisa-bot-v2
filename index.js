@@ -15,41 +15,39 @@ const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // OpenAI call function
-async function askOpenAI(message) {
-  const response = await axios.post(
-    'https://api.openai.com/v1/chat/completions',
-    {
-      model: 'gpt-4-1106-preview',
-      messages: [
-        {
-          role: 'system',
-          content: `You are Lisa Bot v2, an AI assistant for Cade.
-Your job is to decide what the user is asking based on their message.
-You must ALWAYS respond with a pure JSON object and **nothing else**.
-**DO NOT use Markdown, DO NOT use code blocks, DO NOT wrap the JSON in \`\`\`.**
-Only send raw JSON like:
-{
-  "action": "function_name",
-  "parameters": { "store": "...", "vendor": "...", "order_date": "...", "total": "...", "raw_notes": "..." }
-}
-Only choose one action.
-If the user asks for a store list, choose "list_stores".
-If they talk about an order, choose "log_order_smart".
-If they ask about sales, ranking, margin, or revenue, choose "query_vendor_rank" or similar.
-If it’s unclear, guess the best matching action.` // <-- 🔥 THIS PART fixes the error
-        },
-        {
-          role: 'user',
-          content: message
-        }
-      ],
-      temperature: 0,
-    },
-    { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
-  );
-
-  return response.data.choices[0].message.content;
-}
+async function askOpenAI(message, memory = {}) {
+    const systemPrompt = `You are Lisa Bot v2, an AI assistant for Cade.
+  
+  You must always respond with a raw JSON object like:
+  {
+    "action": "function_name",
+    "parameters": { "store": "...", "vendor": "...", ... }
+  }
+  
+  Previous memory:
+  - Last Store: ${memory.lastStore || "unknown"}
+  - Last Vendor: ${memory.lastVendor || "unknown"}
+  
+  Use the memory to fill in missing details if user asks "they" or "there" or "that store".
+  
+  If it's unclear, use the closest guess based on memory.`;
+  
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4-1106-preview',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message }
+        ],
+        temperature: 0,
+      },
+      { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
+    );
+  
+    return response.data.choices[0].message.content;
+  }
+  
 
 // Send message back to Telegram
 async function sendMessage(chatId, text) {
@@ -81,7 +79,7 @@ app.post('/webhook', async (req, res) => {
 
   try {
     // 2. Ask OpenAI to understand the message
-    const aiResponse = await askOpenAI(userText);
+    const aiResponse = await askOpenAI(userText, userMemory[chatId]);
     const toolCall = JSON.parse(aiResponse);
 
     // 3. Fill in missing parameters from memory
