@@ -41,24 +41,25 @@ async function handleToolCall(toolCall) {
     if (error) throw error;
     return `Order logged for ${matchedVendor} at ${matchedStore}.`;
   }
-
-  if (name === 'query_vendor_rank') {
-    const { store, vendor, info_type } = parsedArgs;
-    const matchedStore = capitalizeWords(await matchStore(store));
-    const matchedVendor = capitalizeWords(await matchVendor(vendor));
-    const { data, error } = await supabase.from('vendor_rank')
+  
+  if name === 'query_vendor_rank') {
+    const { store } = parsedArgs;
+  
+    // Look for the top-ranked vendor at the store
+    const { data, error } = await supabase
+      .from('vendor_rank')
       .select('*')
-      .eq('store', matchedStore)
-      .eq('vendor', matchedVendor)
-      .single();
-    if (error || !data) return `No vendor ranking found for ${matchedVendor} at ${matchedStore}.`;
-
-    if (info_type === 'rank') return `${matchedVendor} is ranked #${data.rank} at ${matchedStore}.`;
-    if (info_type === 'revenue') return `${matchedVendor}'s revenue at ${matchedStore} is $${data.total_revenue}.`;
-    if (info_type === 'profit') return `${matchedVendor}'s profit at ${matchedStore} is $${data.total_profit}.`;
-    if (info_type === 'percent_revenue') return `${matchedVendor} generates ${data.percent_revenue}% of total revenue at ${matchedStore}.`;
-
-    return `Details for ${matchedVendor}: ${JSON.stringify(data)}.`;
+      .eq('store', capitalizeWords(store))
+      .order('rank', { ascending: true })
+      .limit(1);
+  
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return `No vendor ranking found for ${store}.`;
+    }
+  
+    const topVendor = data[0];
+    return `The top vendor at ${topVendor.store} is ${topVendor.vendor}, ranked #${topVendor.rank}, with ${topVendor.total_revenue} in total revenue and ${topVendor.total_profit} profit.`;
   }
 
   if (name === 'list_stores') {
