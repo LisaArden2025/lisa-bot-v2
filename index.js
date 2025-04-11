@@ -5,6 +5,10 @@ const { handleToolCall } = require('./supabase');
 const app = express();
 app.use(express.json());
 
+// Memory store
+const userMemory = {}; 
+// { chatId: { lastStore: '...', lastVendor: '...', lastAction: '...', lastResult: '...' } }
+
 // Telegram and OpenAI keys
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
@@ -65,23 +69,54 @@ app.post('/webhook', async (req, res) => {
   const chatId = message.chat.id;
   const userText = message.text;
 
+  // 1. Initialize memory for user if doesn't exist
+  if (!userMemory[chatId]) {
+    userMemory[chatId] = {
+      lastStore: null,
+      lastVendor: null,
+      lastAction: null,
+      lastResult: null
+    };
+  }
+
   try {
-    // Ask OpenAI to understand what the user wants
+    // 2. Ask OpenAI to understand the message
     const aiResponse = await askOpenAI(userText);
     const toolCall = JSON.parse(aiResponse);
 
-    // Handle the tool call (log order, query vendor, etc.)
-    const result = await handleToolCall({ function: { name: toolCall.action, arguments: JSON.stringify(toolCall.parameters) } });
+    // 3. Fill in missing parameters from memory
+    if (!toolCall.parameters.store && userMemory[chatId].lastStore) {
+      toolCall.parameters.store = userMemory[chatId].lastStore;
+    }
+    if (!toolCall.parameters.vendor && userMemory[chatId].lastVendor) {
+      toolCall.parameters.vendor = userMemory[chatId].lastVendor;
+    }
 
-    // Send the result back to the user
+    // 4. Handle the function call (query Supabase)
+    const result = await handleToolCall({
+      function: { name: toolCall.action, arguments: JSON.stringify(toolCall.parameters) },
+    });
+
+    // 5. Update memory after action
+    if (toolCall.parameters.store) {
+      userMemory[chatId].lastStore = toolCall.parameters.store;
+    }
+    if (toolCall.parameters.vendor) {
+      userMemory[chatId].lastVendor = toolCall.parameters.vendor;
+    }
+    userMemory[chatId].lastAction = toolCall.action;
+    userMemory[chatId].lastResult = result;
+
+    // 6. Reply to Telegram
     await sendMessage(chatId, result);
   } catch (error) {
-    console.error('Full error:', error); // <-- ADD THIS LINE
+    console.error('Full error:', error);
     await sendMessage(chatId, 'Sorry, something went wrong. Please try again!');
-  }  
+  }
 
   res.sendStatus(200);
 });
+
 
 // Start server
 const PORT = process.env.PORT || 3000;
