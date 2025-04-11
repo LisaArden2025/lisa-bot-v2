@@ -76,9 +76,9 @@ app.post('/webhook', async (req, res) => {
     // Send the result back to the user
     await sendMessage(chatId, result);
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error('Full error:', error); // <-- ADD THIS LINE
     await sendMessage(chatId, 'Sorry, something went wrong. Please try again!');
-  }
+  }  
 
   res.sendStatus(200);
 });
