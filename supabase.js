@@ -3,9 +3,9 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 
 // Helper: Capitalize Each Word
 function capitalizeWords(str) {
-  return str.replace(/\b\w/g, char => char.toUpperCase());
+  if (!str || typeof str !== 'string') return ''; // 🔥 Fix: Handle undefined or non-strings safely
+  return str.replace(/\b\w/g, (char) => char.toUpperCase());
 }
-
 // Helper: Fuzzy Match Store Name
 async function matchStore(storeName) {
   const { data } = await supabase.from('Stores').select('store');
