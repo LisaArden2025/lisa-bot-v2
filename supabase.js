@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const Fuse = require('fuse.js'); // <-- ADD THIS
+const Fuse = require('fuse.js');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
 // Capitalize helper
@@ -10,13 +10,13 @@ function capitalizeWords(str) {
 
 // Fuzzy Match Store
 async function matchStore(storeName) {
-  const { data } = await supabase.from('Stores').select('store');
+  const { data } = await supabase.from('Stores').select('Store');
   if (!data) return storeName;
-  const stores = data.map(s => s.store);
+  const stores = data.map(s => s.Store);
 
   const fuse = new Fuse(stores, {
     includeScore: true,
-    threshold: 0.4, // tweak sensitivity
+    threshold: 0.4,
   });
 
   const result = fuse.search(storeName);
@@ -25,9 +25,9 @@ async function matchStore(storeName) {
 
 // Fuzzy Match Vendor
 async function matchVendor(vendorName) {
-  const { data } = await supabase.from('Vendors').select('vendor');
+  const { data } = await supabase.from('Vendors').select('Vendor');
   if (!data) return vendorName;
-  const vendors = data.map(v => v.vendor);
+  const vendors = data.map(v => v.Vendor);
 
   const fuse = new Fuse(vendors, {
     includeScore: true,
@@ -48,7 +48,7 @@ async function handleToolCall(toolCall) {
     const matchedStore = capitalizeWords(await matchStore(store));
     const matchedVendor = capitalizeWords(await matchVendor(vendor));
     const { error } = await supabase.from('Orders').insert([
-      { store: matchedStore, vendor: matchedVendor, order_date, total, notes: raw_notes }
+      { Store: matchedStore, Vendor: matchedVendor, "Order Date": order_date, Total: total, Notes: raw_notes }
     ]);
     if (error) throw error;
     return `Order logged for ${matchedVendor} at ${matchedStore}.`;
@@ -59,27 +59,27 @@ async function handleToolCall(toolCall) {
     const { data, error } = await supabase
       .from('vendor_rank')
       .select('*')
-      .eq('store', capitalizeWords(store))
-      .order('rank', { ascending: true })
+      .eq('Store', capitalizeWords(store))
+      .order('Rank', { ascending: true })
       .limit(1);
 
     if (error) throw error;
     if (!data || data.length === 0) return `No vendor ranking found for ${store}.`;
 
     const topVendor = data[0];
-    return `The top vendor at ${topVendor.store} is ${topVendor.vendor}, ranked #${topVendor.rank}, with $${topVendor.total_revenue} revenue and $${topVendor.total_profit} profit.`;
+    return `The top vendor at ${topVendor.Store} is ${topVendor.Vendor}, ranked #${topVendor.Rank}, with $${topVendor["Total Revenue"]} revenue and $${topVendor["Total Profit"]} profit.`;
   }
 
   if (name === 'list_stores') {
-    const { data, error } = await supabase.from('Stores').select('store');
+    const { data, error } = await supabase.from('Stores').select('Store');
     if (error) throw error;
-    return `You buy for these stores: ${data.map(s => s.store).join(', ')}.`;
+    return `You buy for these stores: ${data.map(s => s.Store).join(', ')}.`;
   }
 
   if (name === 'list_vendors') {
-    const { data, error } = await supabase.from('Vendors').select('vendor');
+    const { data, error } = await supabase.from('Vendors').select('Vendor');
     if (error) throw error;
-    return `Your vendors: ${data.map(v => v.vendor).join(', ')}.`;
+    return `Your vendors: ${data.map(v => v.Vendor).join(', ')}.`;
   }
 
   if (name === 'log_inventory_check') {
@@ -87,7 +87,7 @@ async function handleToolCall(toolCall) {
     const matchedStore = capitalizeWords(await matchStore(store));
     const matchedVendor = capitalizeWords(await matchVendor(vendor));
     const { error } = await supabase.from('checked_not_ready').insert([
-      { store: matchedStore, vendor: matchedVendor, notes, date_checked: new Date().toISOString() }
+      { Store: matchedStore, Vendor: matchedVendor, Notes: notes, "Date Checked": new Date().toISOString() }
     ]);
     if (error) throw error;
     return `Inventory check logged for ${matchedVendor} at ${matchedStore}.`;
@@ -96,9 +96,9 @@ async function handleToolCall(toolCall) {
   if (name === 'list_reminders_due') {
     const { data, error } = await supabase.from('Reminders').select('*');
     if (error) throw error;
-    const upcoming = data.filter(r => new Date(r.reminder_date) > new Date());
+    const upcoming = data.filter(r => new Date(r["Reminder Date"]) > new Date());
     if (!upcoming.length) return `No upcoming reminders.`;
-    return `Upcoming reminders: ${upcoming.map(r => `${r.store} - ${r.vendor} on ${r.reminder_date}`).join('; ')}.`;
+    return `Upcoming reminders: ${upcoming.map(r => `${r.Store} - ${r.Vendor} on ${r["Reminder Date"]}`).join('; ')}.`;
   }
 
   if (name === 'query_vendor_sales') {
@@ -107,11 +107,11 @@ async function handleToolCall(toolCall) {
     const matchedVendor = capitalizeWords(await matchVendor(vendor));
     const { data, error } = await supabase
       .from(`${matchedStore} Sales & Inventory by Day`)
-      .select('vendor, units_sold, revenue')
-      .eq('vendor', matchedVendor)
+      .select('Vendor, Units Sold, Revenue')
+      .eq('Vendor', matchedVendor)
       .limit(1);
     if (error || !data.length) return `No sales found for ${matchedVendor} at ${matchedStore}.`;
-    return `${matchedVendor} sold ${data[0].units_sold} units and made $${data[0].revenue} at ${matchedStore}.`;
+    return `${matchedVendor} sold ${data[0]["Units Sold"]} units and made $${data[0].Revenue} at ${matchedStore}.`;
   }
 
   if (name === 'query_top_selling_vendor') {
@@ -119,11 +119,11 @@ async function handleToolCall(toolCall) {
     const matchedStore = capitalizeWords(await matchStore(store));
     const { data, error } = await supabase
       .from(`${matchedStore} Sales & Inventory by Day`)
-      .select('vendor, units_sold')
-      .order('units_sold', { ascending: false })
+      .select('Vendor, Units Sold')
+      .order('Units Sold', { ascending: false })
       .limit(1);
     if (error || !data.length) return `No sales found at ${matchedStore}.`;
-    return `Top selling vendor at ${matchedStore} is ${data[0].vendor} with ${data[0].units_sold} units sold.`;
+    return `Top selling vendor at ${matchedStore} is ${data[0].Vendor} with ${data[0]["Units Sold"]} units sold.`;
   }
 
   if (name === 'query_lowest_margin_vendor') {
@@ -131,12 +131,12 @@ async function handleToolCall(toolCall) {
     const matchedStore = capitalizeWords(await matchStore(store));
     const { data, error } = await supabase
       .from('vendor_rank')
-      .select('vendor, gross_margin_pct')
-      .eq('store', matchedStore)
-      .order('gross_margin_pct', { ascending: true })
+      .select('Vendor, Gross Margin %')
+      .eq('Store', matchedStore)
+      .order('Gross Margin %', { ascending: true })
       .limit(1);
     if (error || !data.length) return `No vendor margin data for ${matchedStore}.`;
-    return `Vendor with lowest margin at ${matchedStore} is ${data[0].vendor} (${data[0].gross_margin_pct}% margin).`;
+    return `Vendor with lowest margin at ${matchedStore} is ${data[0].Vendor} (${data[0]["Gross Margin %"]}% margin).`;
   }
 
   if (name === 'query_vendor_percent_revenue') {
@@ -145,12 +145,12 @@ async function handleToolCall(toolCall) {
     const matchedVendor = capitalizeWords(await matchVendor(vendor));
     const { data, error } = await supabase
       .from('vendor_rank')
-      .select('percent_revenue')
-      .eq('store', matchedStore)
-      .eq('vendor', matchedVendor)
+      .select('Percent Revenue')
+      .eq('Store', matchedStore)
+      .eq('Vendor', matchedVendor)
       .single();
     if (error || !data) return `No percent revenue data found for ${matchedVendor} at ${matchedStore}.`;
-    return `${matchedVendor} generates ${data.percent_revenue}% of ${matchedStore}'s revenue.`;
+    return `${matchedVendor} generates ${data["Percent Revenue"]}% of ${matchedStore}'s revenue.`;
   }
 
   return 'Tool call not recognized.';
