@@ -73,9 +73,7 @@ No explanations. No markdown. Only raw JSON.`
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
       ],
-      functions: functions,
       function_call: 'auto',
-      tool_choice: 'auto',
       assistant_id: assistantId   // ✅ New
     },
     { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
