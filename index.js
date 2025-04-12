@@ -20,14 +20,30 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 function pickBot(message) {
   const lower = message.toLowerCase();
 
-  if (lower.includes('order') || lower.includes('log')) {
+  if (lower.includes('order') || lower.includes('log') || lower.includes('place order')) {
     return { bot: 'orders', functions: orderFunctions };
-  } else if (lower.includes('sales') || lower.includes('revenue') || lower.includes('profit')) {
+  } else if (
+    lower.includes('sales') || 
+    lower.includes('revenue') || 
+    lower.includes('profit') || 
+    lower.includes('vendor') || 
+    lower.includes('rank') || 
+    lower.includes('units') || 
+    lower.includes('top') ||
+    lower.includes('highest')
+  ) {
     return { bot: 'sales', functions: salesFunctions };
-  } else if (lower.includes('inventory') || lower.includes('clearance') || lower.includes('stock')) {
+  } else if (
+    lower.includes('inventory') || 
+    lower.includes('clearance') || 
+    lower.includes('stock') || 
+    lower.includes('overstock') || 
+    lower.includes('dead inventory') || 
+    lower.includes('slow movers')
+  ) {
     return { bot: 'inventory', functions: inventoryFunctions };
   } else {
-    return { bot: 'default', functions: salesFunctions };
+    return { bot: 'default', functions: salesFunctions };  // Still fallback
   }
 }
 
