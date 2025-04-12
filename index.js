@@ -13,22 +13,25 @@ const userMemory = {};
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ordersFunctions = require('./uploadFunctionsOrders.js');
+const salesFunctions = require('./uploadFunctionsSales.js');
+const inventoryFunctions = require('./uploadFunctionsInventory.js');
 
 // Router: Pick which Assistant ID to use
-function pickBot(userText) {
-  const text = userText.toLowerCase();
-  
-  if (text.includes('order') || text.includes('reminder') || text.includes('inventory check')) {
+function pickBot(message) {
+  const lower = message.toLowerCase();
+
+  if (lower.includes('order') || lower.includes('log')) {
     return { bot: 'orders', functions: ordersFunctions };
-  }
-  if (text.includes('sales') || text.includes('revenue') || text.includes('profit') || text.includes('rank')) {
+  } else if (lower.includes('sales') || lower.includes('revenue') || lower.includes('profit')) {
     return { bot: 'sales', functions: salesFunctions };
-  }
-  if (text.includes('clearance') || text.includes('inventory') || text.includes('stock') || text.includes('delivery')) {
+  } else if (lower.includes('inventory') || lower.includes('clearance') || lower.includes('stock')) {
     return { bot: 'inventory', functions: inventoryFunctions };
+  } else {
+    return { bot: 'default', functions: salesFunctions }; // Default to Sales
   }
-  return { bot: 'sales', functions: salesFunctions }; // Default
 }
+
 
 
 // OpenAI call function
@@ -84,7 +87,7 @@ app.post('/webhook', async (req, res) => {
   const chatId = message.chat.id;
   const userText = message.text;
 
-  // Initialize memory for user if it doesn't exist
+  // Initialize memory
   if (!userMemory[chatId]) {
     userMemory[chatId] = {
       lastStore: null,
@@ -95,11 +98,13 @@ app.post('/webhook', async (req, res) => {
   }
 
   try {
-    // Ask OpenAI what to do
-    const aiResponse = await askOpenAI(userText, userMemory[chatId]);
+    // 🔥 New: Pick bot first
+    const { bot, functions } = pickBot(userText);
+
+    // 🔥 New: Pass correct functions
+    const aiResponse = await askOpenAI(userText, userMemory[chatId], functions);
 
     if (aiResponse.function_call) {
-      // Parse OpenAI's selected function call
       const toolCall = {
         function: {
           name: aiResponse.function_call.name,
@@ -107,7 +112,6 @@ app.post('/webhook', async (req, res) => {
         }
       };
 
-      // Fill missing parameters from memory
       const parsedArgs = JSON.parse(toolCall.function.arguments);
       if (!parsedArgs.store && userMemory[chatId].lastStore) {
         parsedArgs.store = userMemory[chatId].lastStore;
@@ -117,16 +121,13 @@ app.post('/webhook', async (req, res) => {
       }
       toolCall.function.arguments = JSON.stringify(parsedArgs);
 
-      // Handle the function call (Supabase query)
       const result = await handleToolCall(toolCall);
 
-      // Update memory
       if (parsedArgs.store) userMemory[chatId].lastStore = parsedArgs.store;
       if (parsedArgs.vendor) userMemory[chatId].lastVendor = parsedArgs.vendor;
       userMemory[chatId].lastAction = toolCall.function.name;
       userMemory[chatId].lastResult = result;
 
-      // Send back to Telegram
       await sendMessage(chatId, result);
     } else {
       await sendMessage(chatId, "Sorry, I didn't understand that.");
