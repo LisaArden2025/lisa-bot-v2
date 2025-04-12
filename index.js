@@ -32,7 +32,7 @@ function pickBot(userText) {
 
 
 // OpenAI call function
-async function askOpenAI(message, memory = {}, assistantId) {
+async function askOpenAI(message, memory = {}) {
   const systemPrompt = `You are Lisa Bot v2, an AI assistant for Cade.
 
 Always respond ONLY with a raw JSON object:
@@ -45,21 +45,25 @@ Memory:
 - Last Store: ${memory.lastStore || "unknown"}
 - Last Vendor: ${memory.lastVendor || "unknown"}
 
-No explanations. No markdown. Only raw JSON.`
+No explanations. No markdown. Only raw JSON.`;
 
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
       model: 'gpt-4-1106-preview',
-      messages: [...],
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message }
+      ],
       functions: functionDefinitions,
       function_call: 'auto',
     },
     { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
   );
 
-  return response.data.choices[0].message;
+  return response.data.choices[0].message; // 💥 THIS WAS MISSING
 }
+
 
 
 // Send message back to Telegram
