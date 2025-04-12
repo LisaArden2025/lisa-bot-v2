@@ -2,21 +2,41 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const { handleToolCall } = require('./supabase');
-const functionDefinitions = require('./uploadFunctions.js'); // 💥 <-- ADDED CORRECTLY
+const functionDefinitions = require('./uploadFunctions.js'); // ✅ Corrected
 const app = express();
 app.use(express.json());
 
 // Memory store
 const userMemory = {}; 
-// { chatId: { lastStore: '...', lastVendor: '...', lastAction: '...', lastResult: '...' } }
 
 // Telegram and OpenAI keys
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+// Router: Pick which Assistant ID to use
+function decideAssistant(message) {
+  const text = message.toLowerCase();
+
+  if (text.includes('order') || text.includes('log') || text.includes('inventory check') || text.includes('remind me')) {
+    return process.env.OPENAI_ORDERS_ASSISTANT_ID; // 🚀 Order Assistant
+  }
+
+  if (text.includes('vendor') || text.includes('sales') || text.includes('revenue') || text.includes('margin') || text.includes('profit') || text.includes('units sold')) {
+    return process.env.OPENAI_DATA_ASSISTANT_ID; // 🚀 Data Assistant
+  }
+
+  if (text.includes('clearance') || text.includes('dead stock') || text.includes('discount') || text.includes('inventory spike')) {
+    return process.env.OPENAI_INVENTORY_ASSISTANT_ID; // 🚀 Inventory Assistant
+  }
+
+  return process.env.OPENAI_DATA_ASSISTANT_ID; // Default fallback
+}
+
 // OpenAI call function
 async function askOpenAI(message, memory = {}) {
+  const assistantId = decideAssistant(message); // 🔥 Pick the right assistant dynamically
+
   const systemPrompt = `You are Lisa Bot v2, an AI assistant for Cade.
 
 Always respond ONLY with a raw JSON object:
@@ -29,12 +49,11 @@ Memory:
 - Last Store: ${memory.lastStore || "unknown"}
 - Last Vendor: ${memory.lastVendor || "unknown"}
 
-If information is missing, guess intelligently based on memory.
-
-NO explanations. NO markdown. NO code blocks. Respond ONLY with raw JSON.`;
+Use memory intelligently to fill missing details.
+No explanations. No markdown. No code blocks. Respond ONLY with raw JSON.`
 
   const response = await axios.post(
-    'https://api.openai.com/v1/chat/completions',
+    `https://api.openai.com/v1/chat/completions`,
     {
       model: 'gpt-4-1106-preview',
       messages: [
@@ -42,10 +61,15 @@ NO explanations. NO markdown. NO code blocks. Respond ONLY with raw JSON.`;
         { role: 'user', content: message }
       ],
       temperature: 0,
-      functions: functionDefinitions,    // 💥 Corrected: now passing an array!
-      function_call: 'auto'               // 💥 Let OpenAI automatically pick the function
+      functions: functionDefinitions, // ✅ Your full tool list
+      function_call: 'auto'
     },
-    { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
+    { 
+      headers: { 
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        'OpenAI-Assistant-Id': assistantId // ✅ Specify the right Assistant dynamically!
+      } 
+    }
   );
 
   return response.data.choices[0].message;
