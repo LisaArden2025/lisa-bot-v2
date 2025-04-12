@@ -48,14 +48,12 @@ Memory:
 No explanations. No markdown. Only raw JSON.`
 
   const response = await axios.post(
-    `https://api.openai.com/v1/assistants/${assistantId}/completions`, // 💥 Correct Assistant URL
+    'https://api.openai.com/v1/chat/completions',
     {
       model: 'gpt-4-1106-preview',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: message }
-      ],
-      temperature: 0
+      messages: [...],
+      functions: functionDefinitions,
+      function_call: 'auto',
     },
     { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
   );
