@@ -2,48 +2,37 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const { handleToolCall } = require('./supabase');
-const app = express();
-app.use(express.json());
-
-// Load all split function files
 const orderFunctions = require('./uploadFunctionsOrders.js');
 const salesFunctions = require('./uploadFunctionsSales.js');
 const inventoryFunctions = require('./uploadFunctionsInventory.js');
-
-// Combine all functions
-const allFunctions = [
-  ...orderFunctions,
-  ...salesFunctions,
-  ...inventoryFunctions
-];
+const app = express();
+app.use(express.json());
 
 // Memory store
-const userMemory = {}; 
+const userMemory = {};
 
 // Telegram and OpenAI keys
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// Router: Pick which Assistant ID to use
+// Bot Picker based on message
 function pickBot(message) {
   const lower = message.toLowerCase();
 
   if (lower.includes('order') || lower.includes('log')) {
-    return { bot: 'orders', functions: ordersFunctions };
+    return { bot: 'orders', functions: orderFunctions };
   } else if (lower.includes('sales') || lower.includes('revenue') || lower.includes('profit')) {
     return { bot: 'sales', functions: salesFunctions };
   } else if (lower.includes('inventory') || lower.includes('clearance') || lower.includes('stock')) {
     return { bot: 'inventory', functions: inventoryFunctions };
   } else {
-    return { bot: 'default', functions: salesFunctions }; // Default to Sales
+    return { bot: 'default', functions: salesFunctions };
   }
 }
 
-
-
 // OpenAI call function
-async function askOpenAI(message, memory = {}) {
+async function askOpenAI(message, memory = {}, functions = []) {
   const systemPrompt = `You are Lisa Bot v2, an AI assistant for Cade.
 
 Always respond ONLY with a raw JSON object:
@@ -61,21 +50,19 @@ No explanations. No markdown. Only raw JSON.`;
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
-      model: 'gpt 3.5-turbo',
+      model: 'gpt-4-1106-preview',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
       ],
-      functions: functionDefinitions,
+      functions: functions,
       function_call: 'auto',
     },
     { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
   );
 
-  return response.data.choices[0].message; // 💥 THIS WAS MISSING
+  return response.data.choices[0].message;
 }
-
-
 
 // Send message back to Telegram
 async function sendMessage(chatId, text) {
@@ -95,7 +82,6 @@ app.post('/webhook', async (req, res) => {
   const chatId = message.chat.id;
   const userText = message.text;
 
-  // Initialize memory
   if (!userMemory[chatId]) {
     userMemory[chatId] = {
       lastStore: null,
@@ -106,10 +92,10 @@ app.post('/webhook', async (req, res) => {
   }
 
   try {
-    // 🔥 New: Pick bot first
-    const { bot, functions } = pickBot(userText);
+    // Pick the bot based on user text
+    const { functions } = pickBot(userText);
 
-    // 🔥 New: Pass correct functions
+    // Ask OpenAI
     const aiResponse = await askOpenAI(userText, userMemory[chatId], functions);
 
     if (aiResponse.function_call) {
