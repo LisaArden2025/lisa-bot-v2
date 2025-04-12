@@ -2,9 +2,20 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const { handleToolCall } = require('./supabase');
-const functionDefinitions = require('./uploadFunctions.js'); // ✅ Corrected
 const app = express();
 app.use(express.json());
+
+// Load all split function files
+const orderFunctions = require('./uploadFunctionsOrders.js');
+const salesFunctions = require('./uploadFunctionsSales.js');
+const inventoryFunctions = require('./uploadFunctionsInventory.js');
+
+// Combine all functions
+const allFunctions = [
+  ...orderFunctions,
+  ...salesFunctions,
+  ...inventoryFunctions
+];
 
 // Memory store
 const userMemory = {}; 
@@ -13,9 +24,6 @@ const userMemory = {};
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const ordersFunctions = require('./uploadFunctionsOrders.js');
-const salesFunctions = require('./uploadFunctionsSales.js');
-const inventoryFunctions = require('./uploadFunctionsInventory.js');
 
 // Router: Pick which Assistant ID to use
 function pickBot(message) {
@@ -53,7 +61,7 @@ No explanations. No markdown. Only raw JSON.`;
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
-      model: 'gpt-4-1106-preview',
+      model: 'gpt 3.5-turbo',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
