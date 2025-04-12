@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const { handleToolCall } = require('./supabase');
-const functionDefinitions = require('./uploadFunctions.js'); // 💥 <-- ADDED
+const functionDefinitions = require('./uploadFunctions.js'); // 💥 <-- ADDED CORRECTLY
 const app = express();
 app.use(express.json());
 
@@ -19,7 +19,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 async function askOpenAI(message, memory = {}) {
   const systemPrompt = `You are Lisa Bot v2, an AI assistant for Cade.
 
-You must ALWAYS respond with a raw JSON object like:
+Always respond ONLY with a raw JSON object:
 {
   "action": "function_name",
   "parameters": { "store": "...", "vendor": "...", ... }
@@ -31,7 +31,7 @@ Memory:
 
 If information is missing, guess intelligently based on memory.
 
-NO explanations. NO markdown. NO code blocks. Respond ONLY with pure JSON.`;
+NO explanations. NO markdown. NO code blocks. Respond ONLY with raw JSON.`;
 
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
@@ -42,8 +42,8 @@ NO explanations. NO markdown. NO code blocks. Respond ONLY with pure JSON.`;
         { role: 'user', content: message }
       ],
       temperature: 0,
-      functions: functionDefinitions,   // 💥 <-- Tell OpenAI about the full list of your 125+ functions
-      function_call: 'auto'              // 💥 <-- Let OpenAI auto pick the correct function
+      functions: functionDefinitions,    // 💥 Corrected: now passing an array!
+      function_call: 'auto'               // 💥 Let OpenAI automatically pick the function
     },
     { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
   );
@@ -69,7 +69,7 @@ app.post('/webhook', async (req, res) => {
   const chatId = message.chat.id;
   const userText = message.text;
 
-  // Initialize memory for user if doesn't exist
+  // Initialize memory for user if it doesn't exist
   if (!userMemory[chatId]) {
     userMemory[chatId] = {
       lastStore: null,
