@@ -5,6 +5,8 @@ const { handleToolCall } = require('./supabase');
 const orderFunctions = require('./uploadFunctionsOrders.js');
 const salesFunctions = require('./uploadFunctionsSales.js');
 const inventoryFunctions = require('./uploadFunctionsInventory.js');
+const { detectAssistantId } = require('./router'); // ✅ New Import
+
 const app = express();
 app.use(express.json());
 
@@ -43,12 +45,12 @@ function pickBot(message) {
   ) {
     return { bot: 'inventory', functions: inventoryFunctions };
   } else {
-    return { bot: 'default', functions: salesFunctions };  // Still fallback
+    return { bot: 'sales', functions: salesFunctions };  // Default fallback
   }
 }
 
 // OpenAI call function
-async function askOpenAI(message, memory = {}, functions = []) {
+async function askOpenAI(message, memory = {}, functions = [], assistantId) {
   const systemPrompt = `You are Lisa Bot v2, an AI assistant for Cade.
 
 Always respond ONLY with a raw JSON object:
@@ -61,7 +63,7 @@ Memory:
 - Last Store: ${memory.lastStore || "unknown"}
 - Last Vendor: ${memory.lastVendor || "unknown"}
 
-No explanations. No markdown. Only raw JSON.`;
+No explanations. No markdown. Only raw JSON.`
 
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
@@ -73,6 +75,8 @@ No explanations. No markdown. Only raw JSON.`;
       ],
       functions: functions,
       function_call: 'auto',
+      tool_choice: 'auto',
+      assistant_id: assistantId   // ✅ New
     },
     { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
   );
@@ -109,10 +113,11 @@ app.post('/webhook', async (req, res) => {
 
   try {
     // Pick the bot based on user text
-    const { functions } = pickBot(userText);
+    const { bot, functions } = pickBot(userText);
+    const assistantId = detectAssistantId(bot);  // ✅ New
 
     // Ask OpenAI
-    const aiResponse = await askOpenAI(userText, userMemory[chatId], functions);
+    const aiResponse = await askOpenAI(userText, userMemory[chatId], functions, assistantId);
 
     if (aiResponse.function_call) {
       const toolCall = {
