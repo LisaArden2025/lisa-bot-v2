@@ -1,4 +1,5 @@
-[
+const functionDefinitions = [
+  
     {
       "name": "query_top_3_vendors",
       "description": "Find the top 3 ranked vendors for a specific store.",
@@ -1566,5 +1567,7 @@
         "required": ["store"]
       }
     }
-]
+];
+module.exports = functionDefinitions;
+
             
