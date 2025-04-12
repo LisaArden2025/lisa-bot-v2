@@ -120,7 +120,7 @@ app.post('/webhook', async (req, res) => {
       const toolCall = {
         function: {
           name: aiResponse.function_call.name,
-          arguments: aiResponse.function_call.arguments
+          arguments: JSON.parse(aiResponse.function_call.arguments)
         }
       };
 
@@ -131,7 +131,7 @@ app.post('/webhook', async (req, res) => {
       if (!parsedArgs.vendor && userMemory[chatId].lastVendor) {
         parsedArgs.vendor = userMemory[chatId].lastVendor;
       }
-      toolCall.function.arguments = JSON.stringify(parsedArgs);
+      toolCall.function.arguments = parsedArgs;
 
       const result = await handleToolCall(toolCall);
 
