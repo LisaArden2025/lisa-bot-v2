@@ -5,7 +5,7 @@ const { handleToolCall } = require('./supabase');
 const orderFunctions = require('./uploadFunctionsOrders.js');
 const salesFunctions = require('./uploadFunctionsSales.js');
 const inventoryFunctions = require('./uploadFunctionsInventory.js');
-const { detectAssistantId } = require('./router'); // ✅ New Import
+const { detectAssistantId } = require('./router');
 
 const app = express();
 app.use(express.json());
@@ -63,17 +63,18 @@ Memory:
 - Last Store: ${memory.lastStore || "unknown"}
 - Last Vendor: ${memory.lastVendor || "unknown"}
 
-No explanations. No markdown. Only raw JSON.`
+No explanations. No markdown. Only raw JSON.`;
 
   const response = await axios.post(
     'https://api.openai.com/v1/chat/completions',
     {
       model: 'gpt-4-1106-preview',
+      temperature: 0,   // ✅ Always set temperature to 0 for strict behavior
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
       ],
-      assistant_id: assistantId   // ✅ New
+      assistant_id: assistantId
     },
     { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
   );
@@ -111,7 +112,7 @@ app.post('/webhook', async (req, res) => {
   try {
     // Pick the bot based on user text
     const { bot, functions } = pickBot(userText);
-    const assistantId = detectAssistantId(bot);  // ✅ New
+    const assistantId = detectAssistantId(bot);
 
     // Ask OpenAI
     const aiResponse = await askOpenAI(userText, userMemory[chatId], functions, assistantId);
@@ -120,26 +121,28 @@ app.post('/webhook', async (req, res) => {
       const toolCall = {
         function: {
           name: aiResponse.function_call.name,
-          arguments: JSON.parse(aiResponse.function_call.arguments)
+          arguments: JSON.parse(aiResponse.function_call.arguments)  // ✅ Parse ONCE here
         }
       };
 
-      const parsedArgs = JSON.parse(toolCall.function.arguments);
-      if (!parsedArgs.store && userMemory[chatId].lastStore) {
-        parsedArgs.store = userMemory[chatId].lastStore;
+      // Autofill store/vendor from memory if missing
+      if (!toolCall.function.arguments.store && userMemory[chatId].lastStore) {
+        toolCall.function.arguments.store = userMemory[chatId].lastStore;
       }
-      if (!parsedArgs.vendor && userMemory[chatId].lastVendor) {
-        parsedArgs.vendor = userMemory[chatId].lastVendor;
+      if (!toolCall.function.arguments.vendor && userMemory[chatId].lastVendor) {
+        toolCall.function.arguments.vendor = userMemory[chatId].lastVendor;
       }
-      toolCall.function.arguments = parsedArgs;
 
+      // Run real Supabase function call
       const result = await handleToolCall(toolCall);
 
-      if (parsedArgs.store) userMemory[chatId].lastStore = parsedArgs.store;
-      if (parsedArgs.vendor) userMemory[chatId].lastVendor = parsedArgs.vendor;
+      // Update memory
+      if (toolCall.function.arguments.store) userMemory[chatId].lastStore = toolCall.function.arguments.store;
+      if (toolCall.function.arguments.vendor) userMemory[chatId].lastVendor = toolCall.function.arguments.vendor;
       userMemory[chatId].lastAction = toolCall.function.name;
       userMemory[chatId].lastResult = result;
 
+      // Send the real result to Telegram
       await sendMessage(chatId, result);
     } else {
       await sendMessage(chatId, "Sorry, I didn't understand that.");
