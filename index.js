@@ -15,28 +15,24 @@ const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // Router: Pick which Assistant ID to use
-function decideAssistant(message) {
-  const text = message.toLowerCase();
-
-  if (text.includes('order') || text.includes('log') || text.includes('inventory check') || text.includes('remind me')) {
-    return process.env.OPENAI_ORDERS_ASSISTANT_ID; // 🚀 Order Assistant
+function pickBot(userText) {
+  const text = userText.toLowerCase();
+  
+  if (text.includes('order') || text.includes('reminder') || text.includes('inventory check')) {
+    return { bot: 'orders', functions: ordersFunctions };
   }
-
-  if (text.includes('vendor') || text.includes('sales') || text.includes('revenue') || text.includes('margin') || text.includes('profit') || text.includes('units sold')) {
-    return process.env.OPENAI_DATA_ASSISTANT_ID; // 🚀 Data Assistant
+  if (text.includes('sales') || text.includes('revenue') || text.includes('profit') || text.includes('rank')) {
+    return { bot: 'sales', functions: salesFunctions };
   }
-
-  if (text.includes('clearance') || text.includes('dead stock') || text.includes('discount') || text.includes('inventory spike')) {
-    return process.env.OPENAI_INVENTORY_ASSISTANT_ID; // 🚀 Inventory Assistant
+  if (text.includes('clearance') || text.includes('inventory') || text.includes('stock') || text.includes('delivery')) {
+    return { bot: 'inventory', functions: inventoryFunctions };
   }
-
-  return process.env.OPENAI_DATA_ASSISTANT_ID; // Default fallback
+  return { bot: 'sales', functions: salesFunctions }; // Default
 }
 
-// OpenAI call function
-async function askOpenAI(message, memory = {}) {
-  const assistantId = decideAssistant(message); // 🔥 Pick the right assistant dynamically
 
+// OpenAI call function
+async function askOpenAI(message, memory = {}, assistantId) {
   const systemPrompt = `You are Lisa Bot v2, an AI assistant for Cade.
 
 Always respond ONLY with a raw JSON object:
@@ -49,31 +45,24 @@ Memory:
 - Last Store: ${memory.lastStore || "unknown"}
 - Last Vendor: ${memory.lastVendor || "unknown"}
 
-Use memory intelligently to fill missing details.
-No explanations. No markdown. No code blocks. Respond ONLY with raw JSON.`
+No explanations. No markdown. Only raw JSON.`
 
   const response = await axios.post(
-    `https://api.openai.com/v1/chat/completions`,
+    `https://api.openai.com/v1/assistants/${assistantId}/completions`, // 💥 Correct Assistant URL
     {
       model: 'gpt-4-1106-preview',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: message }
       ],
-      temperature: 0,
-      functions: functionDefinitions, // ✅ Your full tool list
-      function_call: 'auto'
+      temperature: 0
     },
-    { 
-      headers: { 
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        'OpenAI-Assistant-Id': assistantId // ✅ Specify the right Assistant dynamically!
-      } 
-    }
+    { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
   );
 
   return response.data.choices[0].message;
 }
+
 
 // Send message back to Telegram
 async function sendMessage(chatId, text) {
