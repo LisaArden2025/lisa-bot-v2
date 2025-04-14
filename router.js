@@ -6,7 +6,7 @@ function detectAssistantId(botType) {
   if (botType === 'inventory') {
     return process.env.OPENAI_INVENTORY_ASSISTANT_ID;
   }
-  if (botType === 'sales') {
+  if (botType === 'data') {
     return process.env.OPENAI_DATA_ASSISTANT_ID;
   }
   return process.env.OPENAI_DEFAULT_ASSISTANT_ID;  // Fallback
