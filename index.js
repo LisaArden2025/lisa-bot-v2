@@ -49,6 +49,24 @@ function pickBot(message) {
   }
 }
 
+async function askOpenAIFollowUp(toolResult, assistantId) {
+  const response = await axios.post(
+    'https://api.openai.com/v1/chat/completions',
+    {
+      model: 'gpt-4-1106-preview',
+      temperature: 0,  // ✅ No randomness
+      messages: [
+        { role: 'system', content: "You are Lisa Bot v2. You just received real database information. Turn it into a clear, professional, friendly human response for the user." },
+        { role: 'user', content: `Here is the database result:\n\n${toolResult}\n\nPlease summarize and respond nicely to the user.` }
+      ],
+      assistant_id: assistantId
+    },
+    { headers: { Authorization: `Bearer ${OPENAI_API_KEY}` } }
+  );
+
+  return response.data.choices[0].message.content.trim();
+}
+
 // OpenAI call function
 async function askOpenAI(message, memory = {}, functions = [], assistantId) {
   const systemPrompt = `You are Lisa Bot v2, an AI assistant for Cade.
@@ -134,8 +152,14 @@ app.post('/webhook', async (req, res) => {
       }
 
       // Run real Supabase function call
-      const result = await handleToolCall(toolCall);
+      const toolResult = await handleToolCall(toolCall);
 
+      // 🛠️ NEW: Send real Supabase data BACK to OpenAI for nice human wording
+      const aiResponse = await askOpenAIFollowUp(toolResult, assistantId);
+      
+      // 🛠️ THEN send the final human-style AI message to Telegram
+      await sendMessage(chatId, aiResponse);
+      
       // Update memory
       if (toolCall.function.arguments.store) userMemory[chatId].lastStore = toolCall.function.arguments.store;
       if (toolCall.function.arguments.vendor) userMemory[chatId].lastVendor = toolCall.function.arguments.vendor;
